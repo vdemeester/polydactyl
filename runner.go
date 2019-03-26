@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -103,16 +104,20 @@ func (p *Polydactly) Run(ctx context.Context) error {
 		create := max - p.running
 		p.RUnlock()
 		for i := 0; i < create; i++ {
-			numberOfStep := randInt(0, p.config.MaxStep)
+			numberOfStep := randInt(1, p.config.MaxStep)
 			if p.config.PipelineRun {
-				if err := p.createPipelineRun(ctx, numberOfStep); err != nil {
-					return err
-				}
+				go func() {
+					if err := p.createPipelineRun(ctx, numberOfStep); err != nil {
+						fmt.Fprintln(os.Stderr, "Error creating pipelinerun:", err)
+					}
+				}()
 			}
 			if p.config.TaskRun {
-				if err := p.createTaskRun(ctx, numberOfStep); err != nil {
-					return err
-				}
+				go func() {
+					if err := p.createTaskRun(ctx, numberOfStep); err != nil {
+						fmt.Fprintln(os.Stderr, "Error creating taskrun:", err)
+					}
+				}()
 			}
 		}
 
@@ -120,7 +125,7 @@ func (p *Polydactly) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			// Wait for the current run to get done
 			return err
-		default:
+		case <-time.After(10 * time.Second):
 			// let's continue
 		}
 	}
@@ -136,7 +141,7 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) error {
 	ops := []tb.TaskSpecOp{}
 	for i := 0; i < steps; i++ {
 		stepName := fmt.Sprintf("%s%d", "amazing-busybox", i)
-		ops = append(ops, tb.Step(stepName, "busybox", tb.Command("/bin/sh"), tb.Args("-c", "sleep 30")))
+		ops = append(ops, tb.Step(stepName, "busybox", tb.Command("/bin/sh"), tb.Args("-c", "sleep 60")))
 	}
 	taskrun := tb.TaskRun(name, p.namespace, tb.TaskRunSpec(tb.TaskRunTaskSpec(ops...),
 		tb.TaskRunTimeout(30*time.Second)))
@@ -158,9 +163,9 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) error {
 					if cond.Reason == "TaskRunTimeout" {
 						return true, nil
 					}
-					return true, fmt.Errorf("taskRun %s completed with the wrong reason: %s", "run-giraffe", cond.Reason)
+					return true, fmt.Errorf("taskRun %s completed with the wrong reason: %s", name, cond.Reason)
 				} else if cond.Status == corev1.ConditionTrue {
-					return true, fmt.Errorf("taskRun %s completed successfully, should have been timed out", "run-giraffe")
+					return true, fmt.Errorf("taskRun %s completed successfully, should have been timed out", name)
 				}
 			}
 

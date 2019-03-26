@@ -21,8 +21,8 @@ const (
 func main() {
 	max := flag.Int("max", defaultMax, "maximum number of run in parallel")
 	maxStep := flag.Int("max-step", defaultMaxStep, "maximum number of step in a task")
-	taskrun := flag.Bool("taskrun", true, "wether to create taskrun or not")
-	pipelinerun := flag.Bool("pipelinerun", true, "wether to create pipelinerun or not")
+	taskrun := flag.Bool("taskrun", false, "wether to create taskrun or not")
+	pipelinerun := flag.Bool("pipelinerun", false, "wether to create pipelinerun or not")
 
 	flag.Parse()
 
