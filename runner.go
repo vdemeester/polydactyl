@@ -107,15 +107,15 @@ func (p *Polydactly) Run(ctx context.Context) error {
 			numberOfStep := randInt(1, p.config.MaxStep)
 			if p.config.PipelineRun {
 				go func() {
-					if err := p.createPipelineRun(ctx, numberOfStep); err != nil {
-						fmt.Fprintln(os.Stderr, "Error creating pipelinerun:", err)
+					if name, err := p.createPipelineRun(ctx, numberOfStep); err != nil {
+						fmt.Fprintf(os.Stderr, "Error creating pipelinerun %q: %v\n", name, err)
 					}
 				}()
 			}
 			if p.config.TaskRun {
 				go func() {
-					if err := p.createTaskRun(ctx, numberOfStep); err != nil {
-						fmt.Fprintln(os.Stderr, "Error creating taskrun:", err)
+					if name, err := p.createTaskRun(ctx, numberOfStep); err != nil {
+						fmt.Fprintf(os.Stderr, "Error creating taskrun %q: %v\n", name, err)
 					}
 				}()
 			}
@@ -131,11 +131,11 @@ func (p *Polydactly) Run(ctx context.Context) error {
 	}
 }
 
-func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) error {
-	return nil
+func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, error) {
+	return "", nil
 }
 
-func (p *Polydactly) createTaskRun(ctx context.Context, steps int) error {
+func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, error) {
 	name := fmt.Sprintf("%s%d", randomString(10), steps)
 	fmt.Println("taskrun:", name)
 	ops := []tb.TaskSpecOp{}
@@ -146,7 +146,7 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) error {
 	taskrun := tb.TaskRun(name, p.namespace, tb.TaskRunSpec(tb.TaskRunTaskSpec(ops...),
 		tb.TaskRunTimeout(30*time.Second)))
 	if _, err := p.taskRunClient.Create(taskrun); err != nil {
-		return fmt.Errorf("Failed to create TaskRun `%s`: %s", "run-giraffe", err)
+		return name, fmt.Errorf("Failed to create TaskRun `%s`: %s", "run-giraffe", err)
 	}
 	p.Lock()
 	p.running++
@@ -177,9 +177,9 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) error {
 	p.running--
 	p.Unlock()
 	if err != nil {
-		return err
+		return name, err
 	}
-	return nil
+	return name, nil
 }
 
 func randInt(min int, max int) int {
