@@ -135,13 +135,6 @@ func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, 
 func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, error) {
 	name := fmt.Sprintf("%s%d", randomString(10), steps)
 	fmt.Println("taskrun:", name)
-	// ops := []tb.TaskSpecOp{}
-	// for i := 0; i < steps; i++ {
-	// 	stepName := fmt.Sprintf("%s%d", "amazing-busybox", i)
-	// 	ops = append(ops, tb.Step(stepName, "busybox", tb.Command("/bin/sh"), tb.Args("-c", "sleep 60")))
-	// }
-	// taskrun := tb.TaskRun(name, p.namespace, tb.TaskRunSpec(tb.TaskRunTaskSpec(ops...),
-	// 	tb.TaskRunTimeout(30*time.Second)))
 	tasksteps := []v1beta1.Step{}
 	for i := 0; i < steps; i++ {
 		tasksteps = append(tasksteps, v1beta1.Step{
