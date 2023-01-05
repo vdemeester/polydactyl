@@ -9,16 +9,15 @@ import (
 	"sync"
 	"time"
 
-	duckv1alpha1 "github.com/knative/pkg/apis/duck/v1alpha1"
-	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
+	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
 	"github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
-	typedv1alpha1 "github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1alpha1"
-	tb "github.com/tektoncd/pipeline/test/builder"
+	typedv1beta1 "github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"knative.dev/pkg/apis"
 )
 
 type Polydactly struct {
@@ -27,12 +26,11 @@ type Polydactly struct {
 	running   int
 	namespace string
 
-	kubeClient             *kubernetes.Clientset
-	pipelineClient         typedv1alpha1.PipelineInterface
-	taskClient             typedv1alpha1.TaskInterface
-	taskRunClient          typedv1alpha1.TaskRunInterface
-	pipelineRunClient      typedv1alpha1.PipelineRunInterface
-	pipelineResourceClient typedv1alpha1.PipelineResourceInterface
+	kubeClient        *kubernetes.Clientset
+	pipelineClient    typedv1beta1.PipelineInterface
+	taskClient        typedv1beta1.TaskInterface
+	taskRunClient     typedv1beta1.TaskRunInterface
+	pipelineRunClient typedv1beta1.PipelineRunInterface
 }
 
 func Runner(namespace string, opts ...ConfigOp) (*Polydactly, error) {
@@ -68,11 +66,11 @@ func Runner(namespace string, opts ...ConfigOp) (*Polydactly, error) {
 		return nil, err
 	}
 
-	if _, err := k.CoreV1().Namespaces().Create(&corev1.Namespace{
+	if _, err := k.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
-	}); err != nil {
+	}, metav1.CreateOptions{}); err != nil {
 		return nil, err
 	}
 
@@ -81,12 +79,11 @@ func Runner(namespace string, opts ...ConfigOp) (*Polydactly, error) {
 		namespace: namespace,
 		running:   0,
 
-		kubeClient:             k,
-		pipelineClient:         cs.TektonV1alpha1().Pipelines(namespace),
-		taskClient:             cs.TektonV1alpha1().Tasks(namespace),
-		taskRunClient:          cs.TektonV1alpha1().TaskRuns(namespace),
-		pipelineRunClient:      cs.TektonV1alpha1().PipelineRuns(namespace),
-		pipelineResourceClient: cs.TektonV1alpha1().PipelineResources(namespace),
+		kubeClient:        k,
+		pipelineClient:    cs.TektonV1beta1().Pipelines(namespace),
+		taskClient:        cs.TektonV1beta1().Tasks(namespace),
+		taskRunClient:     cs.TektonV1beta1().TaskRuns(namespace),
+		pipelineRunClient: cs.TektonV1beta1().PipelineRuns(namespace),
 	}, nil
 }
 
@@ -138,26 +135,42 @@ func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, 
 func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, error) {
 	name := fmt.Sprintf("%s%d", randomString(10), steps)
 	fmt.Println("taskrun:", name)
-	ops := []tb.TaskSpecOp{}
+	// ops := []tb.TaskSpecOp{}
+	// for i := 0; i < steps; i++ {
+	// 	stepName := fmt.Sprintf("%s%d", "amazing-busybox", i)
+	// 	ops = append(ops, tb.Step(stepName, "busybox", tb.Command("/bin/sh"), tb.Args("-c", "sleep 60")))
+	// }
+	// taskrun := tb.TaskRun(name, p.namespace, tb.TaskRunSpec(tb.TaskRunTaskSpec(ops...),
+	// 	tb.TaskRunTimeout(30*time.Second)))
+	tasksteps := []v1beta1.Step{}
 	for i := 0; i < steps; i++ {
-		stepName := fmt.Sprintf("%s%d", "amazing-busybox", i)
-		ops = append(ops, tb.Step(stepName, "busybox", tb.Command("/bin/sh"), tb.Args("-c", "sleep 60")))
+		tasksteps = append(tasksteps, v1beta1.Step{
+			Name:    fmt.Sprintf("%s%d", "amazing-busybox", i),
+			Command: []string{"/bin/sh"},
+			Args:    []string{"-c", "sleep 60"},
+		})
 	}
-	taskrun := tb.TaskRun(name, p.namespace, tb.TaskRunSpec(tb.TaskRunTaskSpec(ops...),
-		tb.TaskRunTimeout(30*time.Second)))
-	if _, err := p.taskRunClient.Create(taskrun); err != nil {
+	taskrun := &v1beta1.TaskRun{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: p.namespace},
+		Spec: v1beta1.TaskRunSpec{
+			TaskSpec: &v1beta1.TaskSpec{
+				Steps: tasksteps,
+			},
+		},
+	}
+	if _, err := p.taskRunClient.Create(context.Background(), taskrun, metav1.CreateOptions{}); err != nil {
 		return name, fmt.Errorf("Failed to create TaskRun `%s`: %s", "run-giraffe", err)
 	}
 	p.Lock()
 	p.running++
 	p.Unlock()
 	err := wait.PollImmediate(1*time.Second, 5*time.Minute, func() (bool, error) {
-		r, err := p.taskRunClient.Get(name, metav1.GetOptions{})
+		r, err := p.taskRunClient.Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			return true, err
 		}
-		return func(tr *v1alpha1.TaskRun) (bool, error) {
-			cond := tr.Status.GetCondition(duckv1alpha1.ConditionSucceeded)
+		return func(tr *v1beta1.TaskRun) (bool, error) {
+			cond := tr.Status.GetCondition(apis.ConditionSucceeded)
 			if cond != nil {
 				if cond.Status == corev1.ConditionFalse {
 					if cond.Reason == "TaskRunTimeout" {

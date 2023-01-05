@@ -15,6 +15,7 @@
 package ocagent
 
 import (
+	"math"
 	"time"
 
 	"go.opencensus.io/trace"
@@ -24,7 +25,7 @@ import (
 	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
-func ocSpanToProtoSpan(sd *trace.SpanData) *tracepb.Span {
+func ocSpanToProtoSpan(sd *trace.SpanData, spanConfig SpanConfig) *tracepb.Span {
 	if sd == nil {
 		return nil
 	}
@@ -43,6 +44,7 @@ func ocSpanToProtoSpan(sd *trace.SpanData) *tracepb.Span {
 		Kind:         ocSpanKindToProtoSpanKind(sd.SpanKind),
 		Name:         namePtr,
 		Attributes:   ocAttributesToProtoAttributes(sd.Attributes),
+		TimeEvents:   ocTimeEventsToProtoTimeEvents(sd.Annotations, sd.MessageEvents, spanConfig),
 		Tracestate:   ocTracestateToProtoTracestate(sd.Tracestate),
 	}
 }
@@ -120,6 +122,85 @@ func ocAttributesToProtoAttributes(attrs map[string]interface{}) *tracepb.Span_A
 	return &tracepb.Span_Attributes{
 		AttributeMap: outMap,
 	}
+}
+
+// This code is mostly copied from
+// https://github.com/census-ecosystem/opencensus-go-exporter-stackdriver/blob/master/trace_proto.go#L46
+func ocTimeEventsToProtoTimeEvents(as []trace.Annotation, es []trace.MessageEvent, spanConfig SpanConfig) *tracepb.Span_TimeEvents {
+	if len(as) == 0 && len(es) == 0 {
+		return nil
+	}
+
+	timeEvents := &tracepb.Span_TimeEvents{}
+	var annotations, droppedAnnotationsCount int
+	var messageEvents, droppedMessageEventsCount int
+
+	// Transform annotations
+	for i, a := range as {
+		if annotations >= spanConfig.GetAnnotationEventsPerSpan() {
+			droppedAnnotationsCount = len(as) - i
+			break
+		}
+		annotations++
+		timeEvents.TimeEvent = append(timeEvents.TimeEvent,
+			&tracepb.Span_TimeEvent{
+				Time:  timeToTimestamp(a.Time),
+				Value: transformAnnotationToTimeEvent(&a),
+			},
+		)
+	}
+
+	// Transform message events
+	for i, e := range es {
+		if messageEvents >= spanConfig.GetMessageEventsPerSpan() {
+			droppedMessageEventsCount = len(es) - i
+			break
+		}
+		messageEvents++
+		timeEvents.TimeEvent = append(timeEvents.TimeEvent,
+			&tracepb.Span_TimeEvent{
+				Time:  timeToTimestamp(e.Time),
+				Value: transformMessageEventToTimeEvent(&e),
+			},
+		)
+	}
+
+	// Process dropped counter
+	timeEvents.DroppedAnnotationsCount = clip32(droppedAnnotationsCount)
+	timeEvents.DroppedMessageEventsCount = clip32(droppedMessageEventsCount)
+
+	return timeEvents
+}
+
+func transformAnnotationToTimeEvent(a *trace.Annotation) *tracepb.Span_TimeEvent_Annotation_ {
+	return &tracepb.Span_TimeEvent_Annotation_{
+		Annotation: &tracepb.Span_TimeEvent_Annotation{
+			Description: &tracepb.TruncatableString{Value: a.Message},
+			Attributes:  ocAttributesToProtoAttributes(a.Attributes),
+		},
+	}
+}
+
+func transformMessageEventToTimeEvent(e *trace.MessageEvent) *tracepb.Span_TimeEvent_MessageEvent_ {
+	return &tracepb.Span_TimeEvent_MessageEvent_{
+		MessageEvent: &tracepb.Span_TimeEvent_MessageEvent{
+			Type:             tracepb.Span_TimeEvent_MessageEvent_Type(e.EventType),
+			Id:               uint64(e.MessageID),
+			UncompressedSize: uint64(e.UncompressedByteSize),
+			CompressedSize:   uint64(e.CompressedByteSize),
+		},
+	}
+}
+
+// clip32 clips an int to the range of an int32.
+func clip32(x int) int32 {
+	if x < math.MinInt32 {
+		return math.MinInt32
+	}
+	if x > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(x)
 }
 
 func timeToTimestamp(t time.Time) *timestamp.Timestamp {

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Knative Authors
+Copyright 2019 The Tekton Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,6 +51,8 @@ const (
 	maxGeneratedNameLength = maxNameLength - randomLength - 1
 )
 
+// RestrictLengthWithRandomSuffix takes a base name and returns a potentially shortened version of that name with
+// a random suffix, with the whole string no longer than 63 characters.
 func (simpleNameGenerator) RestrictLengthWithRandomSuffix(base string) string {
 	if len(base) > maxGeneratedNameLength {
 		base = base[:maxGeneratedNameLength]
@@ -58,13 +60,15 @@ func (simpleNameGenerator) RestrictLengthWithRandomSuffix(base string) string {
 	return fmt.Sprintf("%s-%s", base, utilrand.String(randomLength))
 }
 
+var alphaNumericRE = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
+
+// RestrictLength takes a base name and returns a potentially shortened version of that name, no longer than 63 characters.
 func (simpleNameGenerator) RestrictLength(base string) string {
 	if len(base) > maxNameLength {
 		base = base[:maxNameLength]
 	}
-	var isAlphaNumeric = regexp.MustCompile(`^[a-zA-Z0-9]+$`).MatchString
 
-	for !isAlphaNumeric(base[len(base)-1:]) {
+	for !alphaNumericRE.MatchString(base[len(base)-1:]) {
 		base = base[:len(base)-1]
 	}
 	return base

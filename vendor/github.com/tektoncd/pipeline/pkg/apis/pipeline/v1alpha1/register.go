@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Knative Authors
+Copyright 2019 The Tekton Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,18 +46,10 @@ var (
 // Adds the list of known types to Scheme.
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&Task{},
-		&TaskList{},
-		&ClusterTask{},
-		&ClusterTaskList{},
-		&TaskRun{},
-		&TaskRunList{},
-		&Pipeline{},
-		&PipelineList{},
-		&PipelineRun{},
-		&PipelineRunList{},
-		&PipelineResource{},
-		&PipelineResourceList{},
+		&Run{},
+		&RunList{},
+		&VerificationPolicy{},
+		&VerificationPolicyList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
