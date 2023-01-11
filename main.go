@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/tektoncd/pipeline/pkg/names"
+	// "k8s.io/client-go/rest"
+	"knative.dev/pkg/injection"
 )
 
 const (
@@ -40,9 +42,23 @@ func main() {
 		}
 	}()
 
+	cfg := injection.ParseAndGetRESTConfigOrDie()
+	if cfg.QPS == 0 {
+		cfg.QPS = 100
+	}
+	if cfg.Burst == 0 {
+		cfg.Burst = 50
+	}
+	// FIXME(vdemeester): this is here to not break current behavior
+	// multiply by 2, no of controllers being created
+	cfg.QPS = 2 * cfg.QPS
+	cfg.Burst = 2 * cfg.Burst
+
+	ctx, _ = injection.EnableInjectionOrDie(ctx, cfg)
+
 	namespace := names.SimpleNameGenerator.RestrictLengthWithRandomSuffix("polydactyl")
 	fmt.Println("working in namespace:", namespace)
-	p, err := Runner(namespace, WithMax(*max), WithMaxStep(*maxStep), WithTaskRun(*taskrun), WithPipelineRun(*pipelinerun))
+	p, err := Runner(ctx, namespace, WithMax(*max), WithMaxStep(*maxStep), WithTaskRun(*taskrun), WithPipelineRun(*pipelinerun))
 	if err != nil {
 		cancel()
 		fmt.Println("Error:", err)

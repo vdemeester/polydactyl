@@ -10,14 +10,16 @@ import (
 	"time"
 
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
-	"github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
+	// "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	typedv1beta1 "github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	// "k8s.io/client-go/tools/clientcmd"
+	pipelineclient "github.com/tektoncd/pipeline/pkg/client/injection/client"
 	"knative.dev/pkg/apis"
+	kubeclient "knative.dev/pkg/client/injection/kube/client"
 )
 
 type Polydactly struct {
@@ -26,14 +28,14 @@ type Polydactly struct {
 	running   int
 	namespace string
 
-	kubeClient        *kubernetes.Clientset
+	kubeClient        kubernetes.Interface
 	pipelineClient    typedv1beta1.PipelineInterface
 	taskClient        typedv1beta1.TaskInterface
 	taskRunClient     typedv1beta1.TaskRunInterface
 	pipelineRunClient typedv1beta1.PipelineRunInterface
 }
 
-func Runner(namespace string, opts ...ConfigOp) (*Polydactly, error) {
+func Runner(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactly, error) {
 	cfg := &Config{
 		Max:         defaultMax,
 		MaxStep:     defaultMaxStep,
@@ -44,35 +46,40 @@ func Runner(namespace string, opts ...ConfigOp) (*Polydactly, error) {
 	for _, opt := range opts {
 		opt(cfg)
 	}
+	// loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	// // if you want to change the loading rules (which files in which order), you can do so here
+	//
+	// configOverrides := &clientcmd.ConfigOverrides{}
+	// // if you want to change override values or bind them to flags, there are methods to help you
+	//
+	// kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+	// config, err := kubeConfig.ClientConfig()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	//
+	// k, err := kubernetes.NewForConfig(config)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// cs, err := versioned.NewForConfig(config)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	// if you want to change the loading rules (which files in which order), you can do so here
+	k := kubeclient.Get(ctx)
+	cs := pipelineclient.Get(ctx)
 
-	configOverrides := &clientcmd.ConfigOverrides{}
-	// if you want to change override values or bind them to flags, there are methods to help you
-
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-	config, err := kubeConfig.ClientConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	k, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	cs, err := versioned.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := k.CoreV1().Namespaces().Create(context.Background(), &corev1.Namespace{
+	if _, err := k.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: namespace,
 		},
 	}, metav1.CreateOptions{}); err != nil {
 		return nil, err
 	}
+
+	// Give time for any "namespace" mutation to take place
+	time.Sleep(30 * time.Second)
 
 	return &Polydactly{
 		config:    cfg,
@@ -129,6 +136,11 @@ func (p *Polydactly) Run(ctx context.Context) error {
 }
 
 func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, error) {
+	// name := fmt.Sprintf("%s%d", randomString(10), steps)
+	// The Pipeline should do something decent, not too long, not too short
+	// Let's make it 2 task
+	// - git-clone
+	// - golang-build
 	return "", nil
 }
 
@@ -138,7 +150,8 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, erro
 	tasksteps := []v1beta1.Step{}
 	for i := 0; i < steps; i++ {
 		tasksteps = append(tasksteps, v1beta1.Step{
-			Name:    fmt.Sprintf("%s%d", "amazing-busybox", i),
+			Name:    fmt.Sprintf("%s%d", "amazing-ubi", i),
+			Image:   "registry.access.redhat.com/ubi8/ubi@sha256:0234b7c6e5696435e8759e914ed19e80e595a89f380e1d0b5d324d71b7041a13",
 			Command: []string{"/bin/sh"},
 			Args:    []string{"-c", "sleep 60"},
 		})
