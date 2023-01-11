@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tektoncd/pipeline/pkg/apis/pipeline/v1beta1"
+	"github.com/tektoncd/pipeline/pkg/names"
 	// "github.com/tektoncd/pipeline/pkg/client/clientset/versioned"
 	typedv1beta1 "github.com/tektoncd/pipeline/pkg/client/clientset/versioned/typed/pipeline/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +23,7 @@ import (
 	kubeclient "knative.dev/pkg/client/injection/kube/client"
 )
 
-type Polydactly struct {
+type Polydactyl struct {
 	sync.RWMutex
 	config    *Config
 	running   int
@@ -35,53 +36,34 @@ type Polydactly struct {
 	pipelineRunClient typedv1beta1.PipelineRunInterface
 }
 
-func Runner(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactly, error) {
+func Runner(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactyl, error) {
 	cfg := &Config{
 		Max:         defaultMax,
 		MaxStep:     defaultMaxStep,
-		PipelineRun: true,
-		TaskRun:     true,
+		PipelineRun: true, // default to true
+		TaskRun:     true, // default to true
 	}
 
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	// loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	// // if you want to change the loading rules (which files in which order), you can do so here
-	//
-	// configOverrides := &clientcmd.ConfigOverrides{}
-	// // if you want to change override values or bind them to flags, there are methods to help you
-	//
-	// kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-	// config, err := kubeConfig.ClientConfig()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// k, err := kubernetes.NewForConfig(config)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// cs, err := versioned.NewForConfig(config)
-	// if err != nil {
-	// 	return nil, err
-	// }
 
 	k := kubeclient.Get(ctx)
 	cs := pipelineclient.Get(ctx)
 
-	if _, err := k.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}, metav1.CreateOptions{}); err != nil {
-		return nil, err
+	if namespace == "" {
+		namespace := names.SimpleNameGenerator.RestrictLengthWithRandomSuffix("polydactyl")
+		if _, err := k.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: namespace,
+			},
+		}, metav1.CreateOptions{}); err != nil {
+			return nil, err
+		}
 	}
+	fmt.Println("working in namespace:", namespace)
 
-	// Give time for any "namespace" mutation to take place
-	time.Sleep(30 * time.Second)
-
-	return &Polydactly{
+	return &Polydactyl{
 		config:    cfg,
 		namespace: namespace,
 		running:   0,
@@ -94,7 +76,9 @@ func Runner(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactl
 	}, nil
 }
 
-func (p *Polydactly) Run(ctx context.Context) error {
+func (p *Polydactyl) Run(ctx context.Context) error {
+	// Give time for any "namespace" mutation to take place
+	time.Sleep(30 * time.Second)
 	if !p.config.PipelineRun && !p.config.TaskRun {
 		return fmt.Errorf("At least -taskrun or -pipelinerun should be specified")
 	}
@@ -110,18 +94,24 @@ func (p *Polydactly) Run(ctx context.Context) error {
 		for i := 0; i < create; i++ {
 			numberOfStep := randInt(1, p.config.MaxStep)
 			if p.config.PipelineRun {
+				c := make(chan struct{})
 				go func() {
+					c <- struct{}{}
 					if name, err := p.createPipelineRun(ctx, numberOfStep); err != nil {
 						fmt.Fprintf(os.Stderr, "Error creating pipelinerun %q: %v\n", name, err)
 					}
 				}()
+				<-c
 			}
 			if p.config.TaskRun {
+				c := make(chan struct{})
 				go func() {
+					c <- struct{}{}
 					if name, err := p.createTaskRun(ctx, numberOfStep); err != nil {
 						fmt.Fprintf(os.Stderr, "Error creating taskrun %q: %v\n", name, err)
 					}
 				}()
+				<-c
 			}
 		}
 
@@ -135,7 +125,45 @@ func (p *Polydactly) Run(ctx context.Context) error {
 	}
 }
 
-func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, error) {
+func (p *Polydactyl) Report(ctx context.Context) {
+	if p.config.PipelineRun {
+		prs, err := p.pipelineRunClient.List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error listing pipelineruns: %v\n", err)
+		}
+		fmt.Fprintf(os.Stdout, "name: start -> completion\n")
+		for _, pr := range prs.Items {
+			fmt.Fprintf(os.Stdout, "%s: %v -> %v\n",
+				pr.Name, pr.Status.StartTime, pr.Status.CompletionTime,
+			)
+		}
+	}
+	if p.config.TaskRun {
+		trs, err := p.taskRunClient.List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error listing taskruns: %v", err)
+		}
+		pods, err := p.kubeClient.CoreV1().Pods(p.namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error listing pods: %v", err)
+		}
+		podByName := map[string]corev1.Pod{}
+		for _, pod := range pods.Items {
+			podByName[pod.Name] = pod
+		}
+		fmt.Fprintf(os.Stdout, "name: start -> completion\n")
+		for _, tr := range trs.Items {
+			pod := podByName[tr.Status.PodName]
+			fmt.Fprintf(os.Stdout, "%s: %v (%v) -> %v\n",
+				tr.Name, tr.Status.StartTime,
+				pod.Status.StartTime,
+				tr.Status.CompletionTime,
+			)
+		}
+	}
+}
+
+func (p *Polydactyl) createPipelineRun(ctx context.Context, steps int) (string, error) {
 	// name := fmt.Sprintf("%s%d", randomString(10), steps)
 	// The Pipeline should do something decent, not too long, not too short
 	// Let's make it 2 task
@@ -144,7 +172,7 @@ func (p *Polydactly) createPipelineRun(ctx context.Context, steps int) (string, 
 	return "", nil
 }
 
-func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, error) {
+func (p *Polydactyl) createTaskRun(ctx context.Context, steps int) (string, error) {
 	name := fmt.Sprintf("%s%d", randomString(10), steps)
 	fmt.Println("taskrun:", name)
 	tasksteps := []v1beta1.Step{}
@@ -164,14 +192,14 @@ func (p *Polydactly) createTaskRun(ctx context.Context, steps int) (string, erro
 			},
 		},
 	}
-	if _, err := p.taskRunClient.Create(context.Background(), taskrun, metav1.CreateOptions{}); err != nil {
+	if _, err := p.taskRunClient.Create(ctx, taskrun, metav1.CreateOptions{}); err != nil {
 		return name, fmt.Errorf("Failed to create TaskRun `%s`: %s", "run-giraffe", err)
 	}
 	p.Lock()
 	p.running++
 	p.Unlock()
 	err := wait.PollImmediate(1*time.Second, 5*time.Minute, func() (bool, error) {
-		r, err := p.taskRunClient.Get(context.Background(), name, metav1.GetOptions{})
+		r, err := p.taskRunClient.Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			return true, err
 		}
