@@ -1,4 +1,4 @@
-package main
+package runner
 
 import (
 	"context"
@@ -36,10 +36,10 @@ type Polydactyl struct {
 	pipelineRunClient typedv1beta1.PipelineRunInterface
 }
 
-func Runner(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactyl, error) {
+func New(ctx context.Context, namespace string, opts ...ConfigOp) (*Polydactyl, error) {
+	rand.Seed(time.Now().UTC().UnixNano())
+
 	cfg := &Config{
-		Max:         defaultMax,
-		MaxStep:     defaultMaxStep,
 		PipelineRun: true, // default to true
 		TaskRun:     true, // default to true
 	}

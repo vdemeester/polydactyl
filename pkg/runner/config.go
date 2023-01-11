@@ -1,4 +1,4 @@
-package main
+package runner
 
 type Config struct {
 	Max         int

@@ -3,6 +3,7 @@ module github.com/vdemeester/polydactyl
 go 1.18
 
 require (
+	github.com/spf13/cobra v1.6.0
 	github.com/tektoncd/pipeline v0.43.2
 	k8s.io/api v0.25.4
 	k8s.io/apimachinery v0.25.4
@@ -39,6 +40,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
