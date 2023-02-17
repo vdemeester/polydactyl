@@ -97,7 +97,7 @@ func (pr *PipelineRun) IsGracefullyStopped() bool {
 	return pr.Spec.Status == PipelineRunSpecStatusStoppedRunFinally
 }
 
-// PipelineTimeout returns the the applicable timeout for the PipelineRun
+// PipelineTimeout returns the applicable timeout for the PipelineRun
 func (pr *PipelineRun) PipelineTimeout(ctx context.Context) time.Duration {
 	if pr.Spec.Timeout != nil {
 		return pr.Spec.Timeout.Duration
@@ -108,7 +108,7 @@ func (pr *PipelineRun) PipelineTimeout(ctx context.Context) time.Duration {
 	return time.Duration(config.FromContextOrDefaults(ctx).Defaults.DefaultTimeoutMinutes) * time.Minute
 }
 
-// TasksTimeout returns the the tasks timeout for the PipelineRun, if set,
+// TasksTimeout returns the tasks timeout for the PipelineRun, if set,
 // or the tasks timeout computed from the Pipeline and Finally timeouts, if those are set.
 func (pr *PipelineRun) TasksTimeout() *metav1.Duration {
 	t := pr.Spec.Timeouts
@@ -127,7 +127,7 @@ func (pr *PipelineRun) TasksTimeout() *metav1.Duration {
 	return nil
 }
 
-// FinallyTimeout returns the the finally timeout for the PipelineRun, if set,
+// FinallyTimeout returns the finally timeout for the PipelineRun, if set,
 // or the finally timeout computed from the Pipeline and Tasks timeouts, if those are set.
 func (pr *PipelineRun) FinallyTimeout() *metav1.Duration {
 	t := pr.Spec.Timeouts
@@ -351,12 +351,6 @@ func (pr *PipelineRunStatus) GetCondition(t apis.ConditionType) *apis.Condition 
 // and set the started time to the current time
 func (pr *PipelineRunStatus) InitializeConditions(c clock.PassiveClock) {
 	started := false
-	if pr.TaskRuns == nil {
-		pr.TaskRuns = make(map[string]*PipelineRunTaskRunStatus)
-	}
-	if pr.Runs == nil {
-		pr.Runs = make(map[string]*PipelineRunRunStatus)
-	}
 	if pr.StartTime.IsZero() {
 		pr.StartTime = &metav1.Time{Time: c.Now()}
 		started = true
@@ -417,22 +411,10 @@ type ChildStatusReference struct {
 // consume these fields via duck typing.
 type PipelineRunStatusFields struct {
 	// StartTime is the time the PipelineRun is actually started.
-	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 
 	// CompletionTime is the time the PipelineRun completed.
-	// +optional
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
-
-	// Deprecated - use ChildReferences instead.
-	// map of PipelineRunTaskRunStatus with the taskRun name as the key
-	// +optional
-	TaskRuns map[string]*PipelineRunTaskRunStatus `json:"taskRuns,omitempty"`
-
-	// Deprecated - use ChildReferences instead.
-	// map of PipelineRunRunStatus with the run name as the key
-	// +optional
-	Runs map[string]*PipelineRunRunStatus `json:"runs,omitempty"`
 
 	// PipelineResults are the list of results written out by the pipeline task's containers
 	// +optional
@@ -457,7 +439,11 @@ type PipelineRunStatusFields struct {
 	FinallyStartTime *metav1.Time `json:"finallyStartTime,omitempty"`
 
 	// Provenance contains some key authenticated metadata about how a software artifact was built (what sources, what inputs/outputs, etc.).
+	// +optional
 	Provenance *Provenance `json:"provenance,omitempty"`
+
+	// SpanContext contains tracing span context fields
+	SpanContext map[string]string `json:"spanContext,omitempty"`
 }
 
 // SkippedTask is used to describe the Tasks that were skipped due to their When Expressions

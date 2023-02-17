@@ -32,16 +32,12 @@ type Images struct {
 	NopImage string
 	// GitImage is the container image with Git that we use to implement the Git source step.
 	GitImage string
-	// KubeconfigWriterImage is the container image containing our kubeconfig writer binary.
-	KubeconfigWriterImage string
 	// ShellImage is the container image containing bash shell.
 	ShellImage string
 	// ShellImageWin is the container image containing powershell.
 	ShellImageWin string
 	// GsutilImage is the container image containing gsutil.
 	GsutilImage string
-	// PRImage is the container image that we use to implement the PR source step.
-	PRImage string
 	// ImageDigestExporterImage is the container image containing our image digest exporter binary.
 	ImageDigestExporterImage string
 	// WorkingDirInitImage is the container image containing our working dir init binary.
@@ -60,11 +56,9 @@ func (i Images) Validate() error {
 		{i.SidecarLogResultsImage, "sidecarlogresults-image"},
 		{i.NopImage, "nop-image"},
 		{i.GitImage, "git-image"},
-		{i.KubeconfigWriterImage, "kubeconfig-writer-image"},
 		{i.ShellImage, "shell-image"},
 		{i.ShellImageWin, "shell-image-win"},
 		{i.GsutilImage, "gsutil-image"},
-		{i.PRImage, "pr-image"},
 		{i.ImageDigestExporterImage, "imagedigest-exporter-image"},
 		{i.WorkingDirInitImage, "workingdirinit-image"},
 	} {

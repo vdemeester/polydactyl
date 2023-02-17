@@ -97,6 +97,7 @@ func (ts *TaskSpec) Validate(ctx context.Context) (errs *apis.FieldError) {
 	errs = errs.Also(ValidateParameterTypes(ctx, ts.Params).ViaField("params"))
 	errs = errs.Also(ValidateParameterVariables(ctx, ts.Steps, ts.Params))
 	errs = errs.Also(validateTaskContextVariables(ctx, ts.Steps))
+	errs = errs.Also(validateTaskResultsVariables(ctx, ts.Steps, ts.Results))
 	errs = errs.Also(validateResults(ctx, ts.Results).ViaField("results"))
 	return errs
 }
@@ -224,7 +225,7 @@ func validateStep(ctx context.Context, s Step, names sets.String) (errs *apis.Fi
 	if s.Script != "" {
 		if len(s.Command) > 0 {
 			errs = errs.Also(&apis.FieldError{
-				Message: fmt.Sprintf("script cannot be used with command"),
+				Message: "script cannot be used with command",
 				Paths:   []string{"script"},
 			})
 		}
@@ -339,7 +340,7 @@ func (p ParamSpec) ValidateObjectType(ctx context.Context) *apis.FieldError {
 	if p.Type == ParamTypeObject && p.Properties == nil {
 		// If this we are not skipping validation checks due to propagated params
 		// then properties field is required.
-		if config.ValidateParameterVariablesAndWorkspaces(ctx) == true {
+		if config.ValidateParameterVariablesAndWorkspaces(ctx) {
 			return apis.ErrMissingField(fmt.Sprintf("%s.properties", p.Name))
 		}
 	}
@@ -385,7 +386,7 @@ func ValidateParameterVariables(ctx context.Context, steps []Step, params []Para
 		}
 	}
 	errs = errs.Also(validateNameFormat(stringParameterNames.Insert(arrayParameterNames.List()...), objectParamSpecs))
-	if config.ValidateParameterVariablesAndWorkspaces(ctx) == true {
+	if config.ValidateParameterVariablesAndWorkspaces(ctx) {
 		errs = errs.Also(validateVariables(ctx, steps, "params", allParameterNames))
 		errs = errs.Also(validateObjectUsage(ctx, steps, objectParamSpecs))
 	}
@@ -404,6 +405,18 @@ func validateTaskContextVariables(ctx context.Context, steps []Step) *apis.Field
 	)
 	errs := validateVariables(ctx, steps, "context\\.taskRun", taskRunContextNames)
 	return errs.Also(validateVariables(ctx, steps, "context\\.task", taskContextNames))
+}
+
+// validateTaskResultsVariables validates if the results referenced in step script are defined in task results
+func validateTaskResultsVariables(ctx context.Context, steps []Step, results []TaskResult) (errs *apis.FieldError) {
+	resultsNames := sets.NewString()
+	for _, r := range results {
+		resultsNames.Insert(r.Name)
+	}
+	for idx, step := range steps {
+		errs = errs.Also(validateTaskVariable(step.Script, "results", resultsNames).ViaField("script").ViaFieldIndex("steps", idx))
+	}
+	return errs
 }
 
 // validateObjectUsage validates the usage of individual attributes of an object param and the usage of the entire object
