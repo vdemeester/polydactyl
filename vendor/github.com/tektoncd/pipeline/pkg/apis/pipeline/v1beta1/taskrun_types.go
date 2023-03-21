@@ -42,8 +42,6 @@ type TaskRunSpec struct {
 	// +listType=atomic
 	Params []Param `json:"params,omitempty"`
 	// +optional
-	Resources *TaskRunResources `json:"resources,omitempty"`
-	// +optional
 	ServiceAccountName string `json:"serviceAccountName"`
 	// no more than one of the TaskRef and TaskSpec may be specified.
 	// +optional
@@ -115,23 +113,6 @@ type TaskRunDebug struct {
 	Breakpoint []string `json:"breakpoint,omitempty"`
 }
 
-// TaskRunInputs holds the input values that this task was invoked with.
-type TaskRunInputs struct {
-	// +optional
-	// +listType=atomic
-	Resources []TaskResourceBinding `json:"resources,omitempty"`
-	// +optional
-	// +listType=atomic
-	Params []Param `json:"params,omitempty"`
-}
-
-// TaskRunOutputs holds the output values that this task was invoked with.
-type TaskRunOutputs struct {
-	// +optional
-	// +listType=atomic
-	Resources []TaskResourceBinding `json:"resources,omitempty"`
-}
-
 var taskRunCondSet = apis.NewBatchConditionSet()
 
 // TaskRunStatus defines the observed state of TaskRun
@@ -142,7 +123,7 @@ type TaskRunStatus struct {
 	TaskRunStatusFields `json:",inline"`
 }
 
-// TaskRunConditionType is an enum used to store TaskRun custom conditions
+// TaskRunConditionType is an enum used to store TaskRun custom
 // conditions such as one used in spire results verification
 type TaskRunConditionType string
 
@@ -241,11 +222,9 @@ type TaskRunStatusFields struct {
 	PodName string `json:"podName"`
 
 	// StartTime is the time the build is actually started.
-	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 
 	// CompletionTime is the time the build completed.
-	// +optional
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
 
 	// Steps describes the state of each build step container.
@@ -255,6 +234,9 @@ type TaskRunStatusFields struct {
 
 	// CloudEvents describe the state of each cloud event requested via a
 	// CloudEventResource.
+	//
+	// Deprecated: Removed in v0.44.0.
+	//
 	// +optional
 	// +listType=atomic
 	CloudEvents []CloudEventDelivery `json:"cloudEvents,omitempty"`
@@ -285,7 +267,11 @@ type TaskRunStatusFields struct {
 	TaskSpec *TaskSpec `json:"taskSpec,omitempty"`
 
 	// Provenance contains some key authenticated metadata about how a software artifact was built (what sources, what inputs/outputs, etc.).
+	// +optional
 	Provenance *Provenance `json:"provenance,omitempty"`
+
+	// SpanContext contains tracing span context fields
+	SpanContext map[string]string `json:"spanContext,omitempty"`
 }
 
 // TaskRunStepOverride is used to override the values of a Step in the corresponding Task.
