@@ -62,6 +62,11 @@ type VerificationPolicySpec struct {
 	Resources []ResourcePattern `json:"resources"`
 	// Authorities defines the rules for validating signatures.
 	Authorities []Authority `json:"authorities"`
+	// Mode controls whether a failing policy will fail the taskrun/pipelinerun, or only log the warnings
+	// enforce - fail the taskrun/pipelinerun if verification fails (default)
+	// warn - don't fail the taskrun/pipelinerun if verification fails but log warnings
+	// +optional
+	Mode ModeType `json:"mode,omitempty"`
 }
 
 // ResourcePattern defines the pattern of the resource source
@@ -82,6 +87,15 @@ type Authority struct {
 	Key *KeyRef `json:"key,omitempty"`
 }
 
+// ModeType indicates the type of a mode for VerificationPolicy
+type ModeType string
+
+// Valid ModeType:
+const (
+	ModeWarn    ModeType = "warn"
+	ModeEnforce ModeType = "enforce"
+)
+
 // KeyRef defines the reference to a public key
 type KeyRef struct {
 	// SecretRef sets a reference to a secret with the key.
@@ -90,6 +104,14 @@ type KeyRef struct {
 	// Data contains the inline public key.
 	// +optional
 	Data string `json:"data,omitempty"`
+	// KMS contains the KMS url of the public key
+	// Supported formats differ based on the KMS system used.
+	// One example of a KMS url could be:
+	// gcpkms://projects/[PROJECT]/locations/[LOCATION]>/keyRings/[KEYRING]/cryptoKeys/[KEY]/cryptoKeyVersions/[KEY_VERSION]
+	// For more examples please refer https://docs.sigstore.dev/cosign/kms_support.
+	// Note that the KMS is not supported yet.
+	// +optional
+	KMS string `json:"kms,omitempty"`
 	// HashAlgorithm always defaults to sha256 if the algorithm hasn't been explicitly set
 	// +optional
 	HashAlgorithm HashAlgorithm `json:"hashAlgorithm,omitempty"`

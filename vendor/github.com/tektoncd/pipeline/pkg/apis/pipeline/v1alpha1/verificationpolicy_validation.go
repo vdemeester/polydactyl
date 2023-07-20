@@ -55,19 +55,36 @@ func (vs *VerificationPolicySpec) Validate(ctx context.Context) (errs *apis.Fiel
 			errs = errs.Also(a.Key.Validate(ctx).ViaFieldIndex("key", i))
 		}
 	}
+	if vs.Mode != "" && vs.Mode != ModeEnforce && vs.Mode != ModeWarn {
+		errs = errs.Also(apis.ErrInvalidValue(fmt.Sprintf("available values are: %s, %s, but got: %s", ModeEnforce, ModeWarn, vs.Mode), "mode"))
+	}
 	return errs
 }
 
 // Validate KeyRef will check if one of KeyRef's Data or SecretRef exists, and the
 // Supported HashAlgorithm is in supportedSignatureAlgorithms.
 func (key *KeyRef) Validate(ctx context.Context) (errs *apis.FieldError) {
-	if key.Data == "" && key.SecretRef == nil {
-		errs = errs.Also(apis.ErrMissingOneOf("data", "secretref"))
+	// Validate that one and only one of Data, SecretRef, KMS is defined.
+	keyCount := 0
+	if key.Data != "" {
+		keyCount++
+	}
+	if key.SecretRef != nil {
+		keyCount++
+	}
+	if key.KMS != "" {
+		keyCount++
 	}
 
-	if key.Data != "" && key.SecretRef != nil {
-		errs = errs.Also(apis.ErrMultipleOneOf("data", "secretref"))
+	switch keyCount {
+	case 0:
+		errs = errs.Also(apis.ErrMissingOneOf("data", "kms", "secretref"))
+	case 1:
+		// do nothing -- a single key definition is valid
+	default:
+		errs = errs.Also(apis.ErrMultipleOneOf("data", "kms", "secretref"))
 	}
+
 	errs = errs.Also(validateHashAlgorithm(key.HashAlgorithm))
 
 	return errs

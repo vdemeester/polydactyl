@@ -40,7 +40,8 @@ type TaskRunSpec struct {
 	Debug *TaskRunDebug `json:"debug,omitempty"`
 	// +optional
 	// +listType=atomic
-	Params []Param `json:"params,omitempty"`
+	Params Params `json:"params,omitempty"`
+	// Deprecated: Unused, preserved only for backwards compatibility
 	// +optional
 	Resources *TaskRunResources `json:"resources,omitempty"`
 	// +optional
@@ -115,23 +116,6 @@ type TaskRunDebug struct {
 	Breakpoint []string `json:"breakpoint,omitempty"`
 }
 
-// TaskRunInputs holds the input values that this task was invoked with.
-type TaskRunInputs struct {
-	// +optional
-	// +listType=atomic
-	Resources []TaskResourceBinding `json:"resources,omitempty"`
-	// +optional
-	// +listType=atomic
-	Params []Param `json:"params,omitempty"`
-}
-
-// TaskRunOutputs holds the output values that this task was invoked with.
-type TaskRunOutputs struct {
-	// +optional
-	// +listType=atomic
-	Resources []TaskResourceBinding `json:"resources,omitempty"`
-}
-
 var taskRunCondSet = apis.NewBatchConditionSet()
 
 // TaskRunStatus defines the observed state of TaskRun
@@ -142,7 +126,7 @@ type TaskRunStatus struct {
 	TaskRunStatusFields `json:",inline"`
 }
 
-// TaskRunConditionType is an enum used to store TaskRun custom conditions
+// TaskRunConditionType is an enum used to store TaskRun custom
 // conditions such as one used in spire results verification
 type TaskRunConditionType string
 
@@ -241,11 +225,9 @@ type TaskRunStatusFields struct {
 	PodName string `json:"podName"`
 
 	// StartTime is the time the build is actually started.
-	// +optional
 	StartTime *metav1.Time `json:"startTime,omitempty"`
 
 	// CompletionTime is the time the build completed.
-	// +optional
 	CompletionTime *metav1.Time `json:"completionTime,omitempty"`
 
 	// Steps describes the state of each build step container.
@@ -255,6 +237,9 @@ type TaskRunStatusFields struct {
 
 	// CloudEvents describe the state of each cloud event requested via a
 	// CloudEventResource.
+	//
+	// Deprecated: Removed in v0.44.0.
+	//
 	// +optional
 	// +listType=atomic
 	CloudEvents []CloudEventDelivery `json:"cloudEvents,omitempty"`
@@ -265,8 +250,9 @@ type TaskRunStatusFields struct {
 	// +listType=atomic
 	RetriesStatus []TaskRunStatus `json:"retriesStatus,omitempty"`
 
-	// Results from Resources built during the TaskRun. currently includes
-	// the digest of build container images
+	// Results from Resources built during the TaskRun.
+	// This is tomb-stoned along with the removal of pipelineResources
+	// Deprecated: this field is not populated and is preserved only for backwards compatibility
 	// +optional
 	// +listType=atomic
 	ResourcesResult []PipelineResourceResult `json:"resourcesResult,omitempty"`
@@ -285,7 +271,11 @@ type TaskRunStatusFields struct {
 	TaskSpec *TaskSpec `json:"taskSpec,omitempty"`
 
 	// Provenance contains some key authenticated metadata about how a software artifact was built (what sources, what inputs/outputs, etc.).
+	// +optional
 	Provenance *Provenance `json:"provenance,omitempty"`
+
+	// SpanContext contains tracing span context fields
+	SpanContext map[string]string `json:"spanContext,omitempty"`
 }
 
 // TaskRunStepOverride is used to override the values of a Step in the corresponding Task.
@@ -504,7 +494,7 @@ func (tr *TaskRun) GetTimeout(ctx context.Context) time.Duration {
 	// Use the platform default is no timeout is set
 	if tr.Spec.Timeout == nil {
 		defaultTimeout := time.Duration(config.FromContextOrDefaults(ctx).Defaults.DefaultTimeoutMinutes)
-		return defaultTimeout * time.Minute
+		return defaultTimeout * time.Minute //nolint:durationcheck
 	}
 	return tr.Spec.Timeout.Duration
 }
