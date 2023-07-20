@@ -49,7 +49,7 @@
           pkgs = nixpkgsFor.${system};
         in
         {
-          polydactyl = pkgs.buildGo118Module {
+          polydactyl = pkgs.buildGo120Module {
             pname = "polydactyl";
             inherit version;
             # In 'nix develop', we don't need a copy of the source tree
