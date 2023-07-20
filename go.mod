@@ -3,7 +3,7 @@ module github.com/vdemeester/polydactyl
 go 1.18
 
 require (
-	github.com/spf13/cobra v1.6.1
+	github.com/spf13/cobra v1.7.0
 	github.com/tektoncd/pipeline v0.47.2
 	k8s.io/api v0.25.9
 	k8s.io/apimachinery v0.26.4
