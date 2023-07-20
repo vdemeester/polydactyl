@@ -180,8 +180,9 @@ func (p *Polydactyl) createTaskRun(ctx context.Context, steps int) (string, erro
 		tasksteps = append(tasksteps, v1beta1.Step{
 			Name:    fmt.Sprintf("%s%d", "amazing-ubi", i),
 			Image:   "registry.access.redhat.com/ubi8/ubi@sha256:0234b7c6e5696435e8759e914ed19e80e595a89f380e1d0b5d324d71b7041a13",
-			Command: []string{"/bin/sh"},
-			Args:    []string{"-c", "sleep 60"},
+			Script: "#!/usr/bin/envv bash\nsleep 60",
+			//Command: []string{"/bin/sh"},
+			//Args:    []string{"-c", "sleep 60"},
 		})
 	}
 	taskrun := &v1beta1.TaskRun{
