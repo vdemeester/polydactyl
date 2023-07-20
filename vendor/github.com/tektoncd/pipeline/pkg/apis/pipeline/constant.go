@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The logr Authors.
+Copyright 2023 The Tekton Authors
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,11 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logr
+package pipeline
 
-// Discard returns a Logger that discards all messages logged to it.  It can be
-// used whenever the caller is not interested in the logs.  Logger instances
-// produced by this function always compare as equal.
-func Discard() Logger {
-	return New(nil)
-}
+const (
+	// TektonReservedAnnotationExpr is the expression we use to filter out reserved key in annotation
+	TektonReservedAnnotationExpr = "(results.tekton.dev|chains.tekton.dev)/.*"
+)
